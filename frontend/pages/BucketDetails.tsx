@@ -8,7 +8,7 @@ import { UploadProgress } from '../components/UploadProgress';
 import { ToastContainer } from '../components/ToastContainer';
 import { api } from '../services/api';
 import { ApiResponse, Bucket, FileEntry, FileUploadResponse, FileUploadProgress } from '../types';
-import { validateFile, uploadFilesWithProgress } from '../utils/uploadUtils';
+import { validateFile, uploadFilesWithProgress, checkDuplicates } from '../utils/uploadUtils';
 import emptyBucket from '../assets/empty-bucket.png';
 import FilePreviewModal from '../components/FilePreviewModal';
 
@@ -47,6 +47,44 @@ const BucketDetails: React.FC = () => {
     fetchFiles();
   }, [bucketId]);
 
+  // Navigation guard - prevent leaving page during uploads
+  useEffect(() => {
+    const hasPendingUploads = uploads.some((u) => u.status === 'uploading' || u.status === 'pending');
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasPendingUploads) {
+        e.preventDefault();
+        e.returnValue = 'Uploads in progress. Are you sure you want to leave?';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [uploads]);
+
+  // Offline/online detection
+  useEffect(() => {
+    const handleOffline = () => {
+      if (uploads.some((u) => u.status === 'uploading' || u.status === 'pending')) {
+        showToast('error', 'You are offline. Uploads have been paused.');
+      }
+    };
+
+    const handleOnline = () => {
+      if (uploads.some((u) => u.status === 'pending')) {
+        showToast('success', 'Back online. You can retry your uploads.');
+      }
+    };
+
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [uploads, showToast]);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !bucketId) return;
@@ -75,6 +113,14 @@ const BucketDetails: React.FC = () => {
 
   const handleFileDrop = async (files: File[]) => {
     if (!bucketId) return;
+
+    // Check for duplicates
+    const duplicates = checkDuplicates(files, files);
+    if (duplicates.length > 0) {
+      const duplicateNames = duplicates.map((f) => f.name).join(', ');
+      showToast('error', `Files already exist: ${duplicateNames}`);
+      return;
+    }
 
     // Validate files
     const validationErrors: string[] = [];

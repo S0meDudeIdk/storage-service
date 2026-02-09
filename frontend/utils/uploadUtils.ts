@@ -272,3 +272,31 @@ export const filterValidFiles = (
 export const getTotalFileSize = (files: File[]): number => {
   return files.reduce((total, file) => total + file.size, 0);
 };
+
+/**
+ * Checks for duplicate file names against existing files
+ *
+ * Filters the provided files to identify any that have names matching
+ * files already present in the destination. Useful for warning users
+ * about potential overwrites before uploading.
+ *
+ * @param files - Array of File objects to check
+ * @param existingFiles - Array of existing file objects with a 'name' property
+ * @returns Array of files that would duplicate existing file names
+ *
+ * @example
+ * ```ts
+ * const duplicates = checkDuplicates(
+ *   [newFile1, newFile2],
+ *   [{ name: 'existing.txt' }, { name: 'another.pdf' }]
+ * );
+ * // Returns files whose names match existing file names
+ * ```
+ */
+export const checkDuplicates = (
+  files: File[],
+  existingFiles: { name: string }[]
+): File[] => {
+  const existingNames = new Set(existingFiles.map((f) => f.name));
+  return files.filter((file) => existingNames.has(file.name));
+};

@@ -7,7 +7,7 @@ import { useToast } from '../hooks/useToast';
 import { UploadProgress } from '../components/UploadProgress';
 import { ToastContainer } from '../components/ToastContainer';
 import { FileUploadProgress } from '../types';
-import { validateFile, uploadFilesWithProgress, formatFileSize } from '../utils/uploadUtils';
+import { validateFile, uploadFilesWithProgress, formatFileSize, checkDuplicates } from '../utils/uploadUtils';
 import { api } from '../services/api';
 import { ApiResponse, Bucket } from '../types';
 import bucketIcon from '../assets/bucket-icon.png';
@@ -42,6 +42,44 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     fetchBuckets();
   }, []);
+
+  // Navigation guard - prevent leaving page during uploads
+  useEffect(() => {
+    const hasPendingUploads = uploads.some((u) => u.status === 'uploading' || u.status === 'pending');
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasPendingUploads) {
+        e.preventDefault();
+        e.returnValue = 'Uploads in progress. Are you sure you want to leave?';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [uploads]);
+
+  // Offline/online detection
+  useEffect(() => {
+    const handleOffline = () => {
+      if (uploads.some((u) => u.status === 'uploading' || u.status === 'pending')) {
+        showToast('error', 'You are offline. Uploads have been paused.');
+      }
+    };
+
+    const handleOnline = () => {
+      if (uploads.some((u) => u.status === 'pending')) {
+        showToast('success', 'Back online. You can retry your uploads.');
+      }
+    };
+
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [uploads, showToast]);
 
   const handleCreateOrUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,11 +127,23 @@ const Dashboard: React.FC = () => {
 
   /**
    * Handles file drop events on bucket cards
-   * Validates files, creates upload progress entries, and uploads files to the specified bucket
+   * Validates files, checks for duplicates, creates upload progress entries, and uploads files to the specified bucket
    * @param bucketId - The ID of the bucket to upload files to
    * @param files - Array of files to upload
    */
   const handleFileDrop = async (bucketId: string, files: File[]) => {
+    // Get bucket for duplicate checking
+    const bucket = buckets.find((b) => b.bucketId === bucketId);
+    const existingFiles = bucket?.files || [];
+
+    // Check for duplicates
+    const duplicates = checkDuplicates(files, existingFiles);
+    if (duplicates.length > 0) {
+      const duplicateNames = duplicates.map((f) => f.name).join(', ');
+      showToast('error', `Files already exist: ${duplicateNames}`);
+      return;
+    }
+
     // Validate files
     const validationErrors: string[] = [];
     const validFiles = files.filter((file) => {
