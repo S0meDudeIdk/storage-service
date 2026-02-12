@@ -111,11 +111,11 @@ const BucketDetails: React.FC = () => {
     }
   };
 
-  const handleFileDrop = async (files: File[]) => {
+  const handleFileDrop = async (droppedFiles: File[]) => {
     if (!bucketId) return;
 
     // Check for duplicates
-    const duplicates = checkDuplicates(files, files);
+    const duplicates = checkDuplicates(droppedFiles, files);
     if (duplicates.length > 0) {
       const duplicateNames = duplicates.map((f) => f.name).join(', ');
       showToast('error', `Files already exist: ${duplicateNames}`);
@@ -124,7 +124,7 @@ const BucketDetails: React.FC = () => {
 
     // Validate files
     const validationErrors: string[] = [];
-    const validFiles = files.filter((file) => {
+    const validFiles = droppedFiles.filter((file) => {
       const error = validateFile(file);
       if (error) {
         validationErrors.push(error);
@@ -399,7 +399,7 @@ const BucketDetails: React.FC = () => {
     <div {...dragHandlers} className="min-h-screen bg-gray-50 relative">
       {/* Drag overlay */}
       {isDragging && (
-        <div className="fixed inset-0 border-4 border-dashed border-[#00ED64] bg-green-50/30 z-40 flex items-center justify-center">
+        <div className="fixed inset-0 border-4 border-dashed border-[#00ED64] bg-green-50/30 z-[60] flex items-center justify-center pointer-events-none">
           <div className="bg-white rounded-xl p-8 shadow-lg">
             <Upload className="w-16 h-16 text-[#00ED64] mx-auto mb-4" />
             <p className="text-lg font-semibold text-gray-900">Drop files to upload</p>
